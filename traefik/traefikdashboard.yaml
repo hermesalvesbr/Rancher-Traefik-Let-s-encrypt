@@ -1,16 +1,29 @@
+# Certificate for traefik dashboard
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
-  name: traefik.alpha.mydomain.com
-  namespace: traefik
+  name: traefik.alpha.mydomain.com # certificate name - can be changed
+  namespace: traefik # set to namespace where traefik is installed
 spec:
   dnsNames:
-    - traefik.alpha.mydomain.com
-  secretName: traefik.alpha.mydomain.com
+    - traefik.alpha.mydomain.com # domain to be used
+  secretName: traefik.alpha.mydomain.com # certificate name - can be changed - used in IngressRoute
   issuerRef:
-    name: dns01-cluster-issuer
+    name: http01-cluster-issuer # name of http01 cluster issuer 
     kind: ClusterIssuer
 ---
+# Secret for basic auth middleware 
+apiVersion: v1
+kind: Secret
+metadata:
+  name: traefik-auth # used in basic auth middleware
+  namespace: traefik
+data:
+  users: YWRtaW46JGFwcjEkUG0uSU1pSGQkLzY3NGF1WW0uci9neVFrdUxDQVJKMQoK # to generate this use the following command
+  # htpasswd -nb username password | openssl base64
+  # replace username password with yours
+---
+# middleware to enable basic auth in traefik dashboard
 apiVersion: traefik.containo.us/v1alpha1
 kind: Middleware
 metadata:
@@ -19,16 +32,9 @@ metadata:
 spec:
   basicAuth:
     secret: traefik-auth
-
 ---
-apiVersion: v1
-kind: Secret
-metadata:
-  name: traefik-auth
-  namespace: traefik
-data:
-  users: YWRtaW46JGFwcjEkUG0uSU1pSGQkLzY3NGFXSA0uci9neVFrdUxDQVJKMQoK
----
+# Ingress router for traefik dashboard
+# only listens on HTTPS
 apiVersion: traefik.containo.us/v1alpha1
 kind: IngressRoute
 metadata:
@@ -36,16 +42,46 @@ metadata:
   namespace: traefik
 spec:
   entryPoints:
-    - web
     - websecure
   routes:
-    - match: Host(`traefik.alpha.mydomain.com`)
+    - match: Host(`traefik.alpha.mydomain.com`) # domain used - must match in Certificate 
       kind: Rule
       services:
         - name: api@internal
           kind: TraefikService
       middlewares:
-        - name: auth
+        - name: auth # enabling basic auth - must match with middleware name
           namespace: traefik
   tls:
-    secretName: traefik.alpha.mydomain.com
+    secretName: traefik.alpha.mydomain.com # secret name from certificate 
+---
+# Middleware to redirect http to https
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: redirect-https
+  namespace: traefik
+spec:
+  redirectScheme:
+    scheme: https
+    permanent: true
+    port: "443"
+---
+# Ingress route to redirect http to https
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: http-traefik.alpha.mydomain.com-redirect-to-https
+  namespace: traefik
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: Host(`traefik.alpha.mydomain.com`)
+      kind: Rule 
+      services:
+        - name: api@internal
+          kind: TraefikService
+      middlewares:
+        - name: redirect-https
+          namespace: traefik

@@ -1,6 +1,6 @@
 # Version
 
-## Rancher 2.6.2
+## Rancher 2.6.3
 
 ## Traefik 2.5.3
 

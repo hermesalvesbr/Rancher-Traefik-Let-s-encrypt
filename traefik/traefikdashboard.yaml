@@ -1,0 +1,51 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: traefik.alpha.mydomain.com
+  namespace: traefik
+spec:
+  dnsNames:
+    - traefik.alpha.mydomain.com
+  secretName: traefik.alpha.mydomain.com
+  issuerRef:
+    name: dns01-cluster-issuer
+    kind: ClusterIssuer
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: auth
+  namespace: traefik
+spec:
+  basicAuth:
+    secret: traefik-auth
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: traefik-auth
+  namespace: traefik
+data:
+  users: YWRtaW46JGFwcjEkUG0uSU1pSGQkLzY3NGFXSA0uci9neVFrdUxDQVJKMQoK
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: traefik-dashboard
+  namespace: traefik
+spec:
+  entryPoints:
+    - web
+    - websecure
+  routes:
+    - match: Host(`traefik.alpha.mydomain.com`)
+      kind: Rule
+      services:
+        - name: api@internal
+          kind: TraefikService
+      middlewares:
+        - name: auth
+          namespace: traefik
+  tls:
+    secretName: traefik.alpha.mydomain.com
